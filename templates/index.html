@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIMANZI: Sistem Rekomendasi Pola Makan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Menggunakan font Inter */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fc;
+        }
+        .container {
+            max-width: 900px;
+        }
+        .shadow-custom {
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        }
+        .meal-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .meal-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+        }
+        /* Style untuk spinner */
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #ffffff;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="container mx-auto">
+        
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-extrabold text-blue-800">SIMANZI</h1>
+            <p class="text-xl text-gray-600 mt-2">Sistem Rekomendasi Pola Makan Berbasis KNN</p>
+        </header>
+
+        <div id="messageArea" class="hidden p-3 mb-6 rounded-lg text-sm font-medium" role="alert"></div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-custom h-fit">
+                <h2 class="text-2xl font-bold mb-6 text-gray-800 border-b pb-3">Profil Anda</h2>
+                <form id="recommendationForm" class="space-y-4">
+                    
+                    <div>
+                        <label for="Age" class="block text-sm font-medium text-gray-700">Usia (Tahun)</label>
+                        <input type="number" id="Age" name="Ages" required min="10" max="100" value="30" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="Height" class="block text-sm font-medium text-gray-700">Tinggi (cm)</label>
+                            <input type="number" id="Height" name="Height" required min="100" max="250" value="170" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border">
+                        </div>
+                        <div>
+                            <label for="Weight" class="block text-sm font-medium text-gray-700">Berat (kg)</label>
+                            <input type="number" id="Weight" name="Weight" required min="30" max="200" value="70" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="Gender" class="block text-sm font-medium text-gray-700">Jenis Kelamin</label>
+                        <select id="Gender" name="Gender" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border bg-white">
+                            <option value="Male">Laki-laki</option>
+                            <option value="Female">Perempuan</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="ActivityLevel" class="block text-sm font-medium text-gray-700">Tingkat Aktivitas</label>
+                        <select id="ActivityLevel" name="Activity Level" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border bg-white">
+                            <option value="Sedentary">Sangat Rendah (Duduk/Tidur)</option>
+                            <option value="Lightly Active">Ringan (Kerja Kantoran/Jalan Santai)</option>
+                            <option value="Moderately Active" selected>Sedang (Olahraga 3-5 hari/minggu)</option>
+                            <option value="Very Active">Tinggi (Olahraga Berat 6-7 hari/minggu)</option>
+                            <option value="Extra Active">Sangat Tinggi (Atlet Profesional/Pekerja Berat)</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" id="submitBtn" class="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-150 ease-in-out disabled:opacity-50">
+                        <span id="buttonText">Dapatkan Rekomendasi</span>
+                        <div id="spinner" class="spinner ml-2 hidden"></div>
+                    </button>
+                </form>
+            </div>
+
+            <div class="lg:col-span-2 space-y-8">
+                
+                <div id="bmiResult" class="bg-white p-6 rounded-xl shadow-custom hidden">
+                    <h2 class="text-2xl font-bold mb-5 text-gray-800">Status & Kebutuhan Anda</h2>
+                    
+                    <div class="mb-6 pb-4 border-b">
+                        <h3 class="text-lg font-semibold text-blue-700 mb-3">Status Gizi (BMI)</h3>
+                        <div class="flex flex-wrap gap-4 text-center">
+                            <div class="p-3 bg-gray-100 rounded-lg flex-1 min-w-40">
+                                <p class="text-xs font-semibold text-gray-500">BMI (Indeks Massa Tubuh)</p>
+                                <p id="bmiValue" class="text-3xl font-bold text-blue-600 mt-1">--</p>
+                            </div>
+                            <div class="p-3 bg-gray-100 rounded-lg flex-1 min-w-40">
+                                <p class="text-xs font-semibold text-gray-500">Kategori BMI</p>
+                                <p id="bmiStatus" class="text-xl font-bold text-gray-700 mt-2">--</p>
+                            </div>
+                            <div class="p-3 bg-gray-100 rounded-lg flex-1 min-w-40">
+                                <p class="text-xs font-semibold text-gray-500">Kemiripan Profil</p>
+                                <p id="profileSimilarity" class="text-xl font-bold text-gray-700 mt-2">--</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 class="text-lg font-semibold text-blue-700 mb-3">Target Nutrisi Harian</h3>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+                            
+                            <div class="p-3 bg-green-50 rounded-lg border border-green-200">
+                                <p class="text-xs font-semibold text-green-700">Total Kalori</p>
+                                <p id="targetCalorie" class="text-lg font-bold text-green-800 mt-1">---- kkal</p>
+                            </div>
+                            
+                            <div class="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                                <p class="text-xs font-semibold text-yellow-700">Protein</p>
+                                <p id="targetProtein" class="text-lg font-bold text-yellow-800 mt-1">---- g</p>
+                            </div>
+
+                            <div class="p-3 bg-red-50 rounded-lg border border-red-200">
+                                <p class="text-xs font-semibold text-red-700">Karbohidrat</p>
+                                <p id="targetCarbs" class="text-lg font-bold text-red-800 mt-1">---- g</p>
+                            </div>
+
+                            <div class="p-3 bg-purple-50 rounded-lg border border-purple-200">
+                                <p class="text-xs font-semibold text-purple-700">Lemak</p>
+                                <p id="targetFat" class="text-lg font-bold text-purple-800 mt-1">---- g</p>
+                            </div>
+
+                        </div>
+                        <p id="macroNote" class="mt-4 text-xs text-gray-500 italic">Catatan: Target makro disesuaikan berdasarkan status BMI Anda.</p>
+                    </div>
+
+                </div>
+
+                <div id="recommendationResults" class="bg-white p-6 rounded-xl shadow-custom hidden">
+                    <h2 class="text-2xl font-bold mb-6 text-gray-800 border-b pb-3">Rekomendasi Menu (K: <span id="kOptimal">7</span>)</h2>
+                    
+                    <div id="mealsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        </div>
+
+                    <div id="totalNutritionSummary" class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl hidden">
+                        <h3 class="text-lg font-semibold text-blue-800 mb-4">Total Nutrisi Menu Rekomendasi</h3>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+                            
+                            <div class="p-3 bg-white rounded-lg border">
+                                <p class="text-xs font-semibold text-gray-500">Total Kalori</p>
+                                <p id="sumCalorie" class="text-lg font-bold text-green-800 mt-1">-- kkal</p>
+                            </div>
+                            
+                            <div class="p-3 bg-white rounded-lg border">
+                                <p class="text-xs font-semibold text-gray-500">Protein</p>
+                                <p id="sumProtein" class="text-lg font-bold text-yellow-800 mt-1">-- g</p>
+                            </div>
+
+                            <div class="p-3 bg-white rounded-lg border">
+                                <p class="text-xs font-semibold text-gray-500">Karbohidrat</p>
+                                <p id="sumCarbs" class="text-lg font-bold text-red-800 mt-1">-- g</p>
+                            </div>
+
+                            <div class="p-3 bg-white rounded-lg border">
+                                <p class="text-xs font-semibold text-gray-500">Lemak</p>
+                                <p id="sumFat" class="text-lg font-bold text-purple-800 mt-1">-- g</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="placeholderMessage" class="text-center p-10 bg-gray-100 rounded-xl text-gray-500">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19H5a2 2 0 01-2-2v-3m18 0V9a2 2 0 00-2-2H9"></path>
+                    </svg>
+                    <h3 class="mt-2 text-lg font-medium text-gray-900">Siap untuk Hidup Sehat?</h3>
+                    <p class="mt-1 text-sm text-gray-500">Isi profil Anda di sebelah kiri untuk mendapatkan rekomendasi pola makan terbaik!</p>
+                </div>
+                
+            </div>
+            
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('recommendationForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const spinner = document.getElementById('spinner');
+        const buttonText = document.getElementById('buttonText');
+        const bmiResultDiv = document.getElementById('bmiResult');
+        const recommendationResultsDiv = document.getElementById('recommendationResults');
+        const mealsContainer = document.getElementById('mealsContainer');
+        const placeholderMessage = document.getElementById('placeholderMessage');
+        const messageArea = document.getElementById('messageArea');
+        const totalNutritionSummaryDiv = document.getElementById('totalNutritionSummary');
+
+        // Peta terjemahan untuk kategori makanan (Lunch -> Makan Siang, dll.)
+        const MEAL_TRANSLATIONS = {
+            "Breakfast": "Sarapan",
+            "Lunch": "Makan Siang",
+            "Dinner": "Makan Malam",
+            "Snack": "Camilan" 
+        };
+
+        // Konstanta untuk perhitungan
+        const ACTIVITY_FACTORS = {
+            "Sedentary": 1.2,
+            "Lightly Active": 1.375,
+            "Moderately Active": 1.55,
+            "Very Active": 1.725,
+            "Extra Active": 1.9
+        };
+
+        // Fungsi utilitas untuk menampilkan pesan (sukses/error)
+        function displayMessage(message, type = 'error') {
+            messageArea.innerHTML = message;
+            messageArea.classList.remove('hidden', 'bg-red-100', 'text-red-800', 'bg-green-100', 'text-green-800');
+            if (type === 'error') {
+                messageArea.classList.add('bg-red-100', 'text-red-800');
+            } else {
+                messageArea.classList.add('bg-green-100', 'text-green-800');
+            }
+        }
+
+        /**
+         * @param {number} berat Berat badan (kg)
+         * @param {number} tinggi Tinggi badan (cm)
+         * @returns { {value: string, status: string} } BMI dan kategori
+         */
+        function getBmiStatus(berat, tinggi) {
+            const heightM = tinggi / 100;
+            const bmi = berat / (heightM * heightM);
+            let status;
+
+            if (bmi < 18.5) {
+                status = "Kurus (Underweight)";
+            } else if (bmi >= 18.5 && bmi < 25) {
+                status = "Normal (Healthy Weight)";
+            } else if (bmi >= 25 && bmi < 30) {
+                status = "Gemuk (Overweight)";
+            } else {
+                status = "Obesitas (Obesity)";
+            }
+
+            return {
+                value: bmi.toFixed(2),
+                status: status
+            };
+        }
+
+        /**
+         * Menghitung TDEE (Total Daily Energy Expenditure)
+         * menggunakan rumus Mifflin-St Jeor.
+         * @returns { {bmr: number, tdee: number} } BMR dan TDEE
+         */
+        function calculateTDEE(berat, tinggi, usia, gender, activityLevel) {
+            let bmr;
+            // Rumus Mifflin-St Jeor
+            if (gender === "Male") {
+                bmr = (10 * berat) + (6.25 * tinggi) - (5 * usia) + 5;
+            } else { // Female
+                bmr = (10 * berat) + (6.25 * tinggi) - (5 * usia) - 161;
+            }
+
+            const palFactor = ACTIVITY_FACTORS[activityLevel] || 1.55; // Default Moderately Active
+            const tdee = Math.round(bmr * palFactor);
+
+            return {
+                bmr: Math.round(bmr),
+                tdee: tdee
+            };
+        }
+
+        /**
+         * Menghitung target makronutrien (g) berdasarkan TDEE dan BMI.
+         * @param {number} tdee Total Daily Energy Expenditure (kkal)
+         * @param {string} bmiStatus Kategori BMI
+         * @returns { {totalCalories: number, proteinGrams: number, carbsGrams: number, fatGrams: number} }
+         */
+        function calculateMacros(tdee, bmiStatus) {
+            let calAdjustment = 0;
+            let p_ratio, c_ratio, f_ratio;
+
+            // Penyesuaian Kalori berdasarkan BMI (Sederhana)
+            if (bmiStatus.includes("Gemuk") || bmiStatus.includes("Obesitas")) {
+                calAdjustment = -500; 
+            } else if (bmiStatus.includes("Kurus")) {
+                calAdjustment = 300; 
+            }
+            
+            // TDEE yang Disesuaikan (min 1200 kkal)
+            const adjustedTDEE = Math.max(1200, tdee + calAdjustment);
+            
+            // Rasio Makro (berdasarkan persentase kalori)
+            if (bmiStatus.includes("Gemuk") || bmiStatus.includes("Obesitas")) {
+                 // Higher Protein / Balanced
+                p_ratio = 0.25; 
+                c_ratio = 0.50; 
+                f_ratio = 0.25;
+            } else {
+                // General Healthy Diet (Normal/Kurus)
+                p_ratio = 0.20;
+                c_ratio = 0.55; 
+                f_ratio = 0.25; 
+            }
+
+            // Perhitungan Grams (Protein & Karbohidrat: 4 kkal/g, Lemak: 9 kkal/g)
+            const proteinGrams = Math.round((adjustedTDEE * p_ratio) / 4);
+            const carbsGrams = Math.round((adjustedTDEE * c_ratio) / 4);
+            const fatGrams = Math.round((adjustedTDEE * f_ratio) / 9);
+
+            return {
+                totalCalories: adjustedTDEE,
+                proteinGrams: proteinGrams,
+                carbsGrams: carbsGrams,
+                fatGrams: fatGrams
+            };
+        }
+
+        /**
+         * Fungsi untuk menampilkan hasil perhitungan TDEE dan Makro
+         */
+        function displayNutritionalTargets(tdeeData, macroData, bmiStatus) {
+            document.getElementById('targetCalorie').textContent = `${macroData.totalCalories} kkal`;
+            document.getElementById('targetProtein').textContent = `${macroData.proteinGrams} g`;
+            document.getElementById('targetCarbs').textContent = `${macroData.carbsGrams} g`;
+            document.getElementById('targetFat').textContent = `${macroData.fatGrams} g`;
+
+            let note = "Kebutuhan harian dihitung berdasarkan berat, tinggi, usia, dan tingkat aktivitas Anda.";
+
+            if (bmiStatus.includes("Gemuk") || bmiStatus.includes("Obesitas")) {
+                note = `Kebutuhan energi harian disesuaikan untuk tujuan **Penurunan Berat Badan** (Defisit Kalori).`;
+            } else if (bmiStatus.includes("Kurus")) {
+                note = `Kebutuhan energi harian disesuaikan untuk tujuan **Penambahan Berat Badan** (Surplus Kalori).`;
+            }
+
+            document.getElementById('macroNote').innerHTML = `Catatan: ${note}`;
+        }
+
+
+        // Fungsi untuk me-render hasil rekomendasi (dari server)
+        function displayResults(result, macroData) {
+            console.log("Menerima Data Rekomendasi:", result); // LOG JS PENTING
+            
+            // 1. Hitung dan Tampilkan BMI
+            const { Weight: berat, Height: tinggi } = result.user_data;
+            const bmiData = getBmiStatus(berat, tinggi);
+            document.getElementById('bmiValue').textContent = bmiData.value;
+            document.getElementById('bmiStatus').textContent = bmiData.status;
+            document.getElementById('profileSimilarity').textContent = `${result.profil_mirip_jarak || 'N/A'}`; 
+            
+            // 2. Tampilkan Kebutuhan Nutrisi Harian (Target)
+            displayNutritionalTargets(result.tdee_data, macroData, bmiData.status); 
+
+            // 3. Inisialisasi total nutrisi
+            let totalCalorie = 0;
+            let totalProtein = 0;
+            let totalCarbs = 0;
+            let totalFat = 0;
+
+            // 4. Tampilkan Kartu Makanan & Hitung Total
+            mealsContainer.innerHTML = ''; // Bersihkan kontainer
+            const meals = result.rekomendasi;
+
+            for (const mealType in meals) {
+                const meal = meals[mealType];
+                
+                // Terjemahkan nama kategori makanan
+                const translatedMealType = MEAL_TRANSLATIONS[mealType] || mealType;
+                
+                // Akumulasikan total (gunakan 0 jika data tidak tersedia)
+                const cal = parseFloat(meal.kalori) || 0;
+                const prot = parseFloat(meal.protein) || 0;
+                const carbs = parseFloat(meal.carbohydrates) || 0; 
+                const fat = parseFloat(meal.fat) || 0; 
+                
+                totalCalorie += cal;
+                totalProtein += prot;
+                totalCarbs += carbs;
+                totalFat += fat;
+                
+                // Jika Anda sudah menerapkan terjemahan nama menu di Flask, ini akan muncul dalam bahasa Indonesia
+                const card = `
+                    <div class="meal-card p-4 bg-white border border-gray-200 rounded-xl">
+                        <h3 class="text-xl font-semibold mb-2 text-blue-700">${translatedMealType}</h3>
+                        <p class="text-lg font-bold text-gray-800">${meal.nama}</p>
+                        <div class="mt-3 space-y-1 text-sm text-gray-600">
+                            <p><strong>Energi:</strong> ${cal.toFixed(1)} kkal</p>
+                            <p><strong>Protein:</strong> ${prot.toFixed(1)} gram</p>
+                            <p><strong>Karbohidrat:</strong> ${carbs.toFixed(1)} gram</p>
+                            <p><strong>Lemak:</strong> ${fat.toFixed(1)} gram</p>
+                        </div>
+                    </div>
+                `;
+                mealsContainer.insertAdjacentHTML('beforeend', card);
+            }
+            
+            // 5. Tampilkan Total Nutrisi Menu Rekomendasi
+            document.getElementById('sumCalorie').textContent = `${Math.round(totalCalorie)} kkal`;
+            document.getElementById('sumProtein').textContent = `${Math.round(totalProtein)} g`;
+            document.getElementById('sumCarbs').textContent = `${Math.round(totalCarbs)} g`;
+            document.getElementById('sumFat').textContent = `${Math.round(totalFat)} g`;
+            totalNutritionSummaryDiv.classList.remove('hidden');
+
+
+            // 6. Tampilkan Div Hasil
+            placeholderMessage.classList.add('hidden');
+            bmiResultDiv.classList.remove('hidden');
+            recommendationResultsDiv.classList.remove('hidden');
+            messageArea.classList.add('hidden');
+        }
+
+        // Event Listener untuk Form Submission
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // Reset UI
+            displayMessage('', 'hidden');
+            submitBtn.disabled = true;
+            buttonText.textContent = 'Memproses...';
+            spinner.classList.remove('hidden');
+            placeholderMessage.classList.remove('hidden');
+            bmiResultDiv.classList.add('hidden');
+            recommendationResultsDiv.classList.add('hidden');
+            totalNutritionSummaryDiv.classList.add('hidden'); // Sembunyikan summary saat memproses
+
+            try {
+                // 1. Ambil data dari form
+                const Ages = parseFloat(document.getElementById('Age').value);
+                const Height = parseFloat(document.getElementById('Height').value);
+                const Weight = parseFloat(document.getElementById('Weight').value);
+                const Gender = document.getElementById('Gender').value;
+                const ActivityLevel = document.getElementById('ActivityLevel').value;
+
+                // 2. Hitung TDEE dan Makro berdasarkan input user
+                const bmiStatus = getBmiStatus(Weight, Height).status;
+                const tdeeData = calculateTDEE(Weight, Height, Ages, Gender, ActivityLevel);
+                const macroData = calculateMacros(tdeeData.tdee, bmiStatus); 
+                
+                // 3. Buat Payload untuk server (menggunakan hasil perhitungan baru)
+                const data = {
+                    Ages: Ages,
+                    Height: Height,
+                    Weight: Weight,
+                    Gender: Gender,
+                    "Activity Level": ActivityLevel,
+                    Disease: "Tidak Ada", 
+                    // Target Nutrisi yang Dihitung untuk KNN
+                    "Daily Calorie Target": macroData.totalCalories, 
+                    Protein: macroData.proteinGrams,
+                    Carbohydrates: macroData.carbsGrams,
+                    Fiber: 30, 
+                    Fat: macroData.fatGrams,
+                    "Dietary Preference": "Omnivore" 
+                };
+                
+                console.log("Mengirim data ke server dengan target baru:", data); 
+
+                // Panggil endpoint Flask
+                const maxRetries = 5;
+                let lastResponse = null;
+
+                for (let i = 0; i < maxRetries; i++) {
+                    try {
+                        const response = await fetch('/rekomendasi', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(data),
+                        });
+                        
+                        lastResponse = response;
+
+                        if (response.ok) {
+                            // Sukses: Parsing JSON dan Tampilkan Hasil
+                            const result = await response.json();
+                            result.tdee_data = tdeeData; 
+                            result.user_data = { Weight, Height };
+                            displayResults(result, macroData);
+                            return; // Keluar dari loop setelah sukses
+                        }
+
+                        // Jika response tidak OK, coba lagi setelah menunggu
+                        if (response.status === 429 || response.status >= 500) {
+                            const delay = Math.pow(2, i) * 1000;
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                        } else {
+                            // Untuk error client-side (4xx) yang bukan throttling, hentikan retry
+                            break;
+                        }
+
+                    } catch (error) {
+                        // Kesalahan jaringan, coba lagi setelah menunggu
+                        const delay = Math.pow(2, i) * 1000;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    }
+                }
+                
+                // Jika semua percobaan gagal
+                const errorJson = lastResponse ? await lastResponse.json() : {};
+                const errorMsg = errorJson.error || `Server mengembalikan status ${lastResponse ? lastResponse.status : 'N/A'}.`;
+                console.error("Kesalahan Respons Server/Jaringan:", errorMsg);
+                displayMessage(`Gagal mendapatkan rekomendasi: ${errorJson.error || 'Terjadi kesalahan pada server.'}`, 'error');
+
+
+            } catch (error) {
+                console.error("Kesalahan Umum:", error); 
+                displayMessage(`Terjadi kesalahan umum: ${error.message}`, 'error');
+            } finally {
+                // Selesai: kembalikan tombol ke keadaan semula
+                submitBtn.disabled = false;
+                buttonText.textContent = 'Dapatkan Rekomendasi';
+                spinner.classList.add('hidden');
+            }
+        });
+
+        // Tampilkan pesan default saat pertama kali dimuat
+        document.addEventListener('DOMContentLoaded', () => {
+             placeholderMessage.classList.remove('hidden');
+        });
+
+        /*
+            Update Fungsi calculateMacros (dihapus argumen 'disease')
+        */
+        function calculateMacros(tdee, bmiStatus) {
+            let calAdjustment = 0;
+            let p_ratio, c_ratio, f_ratio;
+
+            // Penyesuaian Kalori berdasarkan BMI
+            if (bmiStatus.includes("Gemuk") || bmiStatus.includes("Obesitas")) {
+                calAdjustment = -500; // Defisit
+            } else if (bmiStatus.includes("Kurus")) {
+                calAdjustment = 300; // Surplus
+            }
+            
+            // TDEE yang Disesuaikan (min 1200 kkal)
+            const adjustedTDEE = Math.max(1200, tdee + calAdjustment);
+            
+            // Rasio Makro (berdasarkan persentase kalori)
+            if (bmiStatus.includes("Gemuk") || bmiStatus.includes("Obesitas")) {
+                 // Higher Protein / Balanced untuk penurunan BB
+                p_ratio = 0.25; // 25% Protein
+                c_ratio = 0.50; // 50% Karbohidrat
+                f_ratio = 0.25; // 25% Lemak
+            } else {
+                // General Healthy Diet (Normal/Kurus)
+                p_ratio = 0.20; // 20% Protein
+                c_ratio = 0.55; // 55% Karbohidrat
+                f_ratio = 0.25; // 25% Lemak
+            }
+
+            // Perhitungan Grams (Protein & Karbohidrat: 4 kkal/g, Lemak: 9 kkal/g)
+            const proteinGrams = Math.round((adjustedTDEE * p_ratio) / 4);
+            const carbsGrams = Math.round((adjustedTDEE * c_ratio) / 4);
+            const fatGrams = Math.round((adjustedTDEE * f_ratio) / 9);
+
+            return {
+                totalCalories: adjustedTDEE,
+                proteinGrams: proteinGrams,
+                carbsGrams: carbsGrams,
+                fatGrams: fatGrams
+            };
+        }
+
+        /*
+            Update Fungsi displayNutritionalTargets (dihapus argumen 'disease' dan logika penyakit)
+        */
+        function displayNutritionalTargets(tdeeData, macroData, bmiStatus) {
+            document.getElementById('targetCalorie').textContent = `${macroData.totalCalories} kkal`;
+            document.getElementById('targetProtein').textContent = `${macroData.proteinGrams} g`;
+            document.getElementById('targetCarbs').textContent = `${macroData.carbsGrams} g`;
+            document.getElementById('targetFat').textContent = `${macroData.fatGrams} g`;
+
+            let note = "Kebutuhan harian dihitung berdasarkan berat, tinggi, usia, dan tingkat aktivitas Anda.";
+
+            if (bmiStatus.includes("Gemuk") || bmiStatus.includes("Obesitas")) {
+                note = `Kebutuhan energi harian disesuaikan untuk tujuan **Penurunan Berat Badan** (Defisit Kalori).`;
+            } else if (bmiStatus.includes("Kurus")) {
+                note = `Kebutuhan energi harian disesuaikan untuk tujuan **Penambahan Berat Badan** (Surplus Kalori).`;
+            }
+
+            document.getElementById('macroNote').innerHTML = `Catatan: ${note}`;
+        }
+    </script>
+</body>
+</html>
